@@ -11,6 +11,7 @@ async function setupDemo(page) {
   await page.getByLabel('Persian year').fill('1405');
   await page.getByLabel('Persian month').selectOption('6');
   await page.getByRole('button', { name: 'Apply month' }).click();
+  await expect(page.locator('#notification')).toHaveText('Planning month updated.');
   await page.getByLabel('I reviewed official holidays for this month.').check();
 }
 test('employee create, edit, delete, import preview and persistence', async ({ page }) => {
@@ -37,14 +38,44 @@ test('employee create, edit, delete, import preview and persistence', async ({ p
   await expect(page.locator('.employee-card')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+test('an employee displayed after saving survives reload with a delayed storage commit', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (...args) {
+      const transaction = original.apply(this, args);
+      if (this.name === 'operation-room-manager' && args[1] === 'readwrite') {
+        const store = transaction.objectStore('application');
+        const until = performance.now() + 400;
+        const keepOpen = () => {
+          if (performance.now() < until) store.get('test-commit-delay').onsuccess = keepOpen;
+        };
+        keepOpen();
+      }
+      return transaction;
+    };
+  });
+  await open(page, 'employees');
+  await page.getByRole('button', { name: 'Add your first employee' }).click();
+  await page.getByLabel('Full name').fill('Durable employee');
+  await page.getByLabel('Years of service', { exact: true }).fill('5');
+  await page.getByLabel('Productivity category').selectOption('4–8');
+  await page.getByRole('button', { name: 'Save employee' }).click();
+  await expect(page.locator('#save-indicator')).toHaveText('Saving…');
+  await expect(page.locator('.employee-card')).toHaveCount(0);
+  await expect(page.locator('.employee-card')).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Durable employee' })).toBeVisible();
+});
 test('calendar holiday overlap, review invalidation and keyboard navigation', async ({ page }) => {
   await open(page, 'calendar');
   await page.getByLabel('Persian year').fill('1405'); await page.getByLabel('Persian month').selectOption('6');
   await page.getByRole('button', { name: 'Apply month' }).click();
+  await expect(page.locator('#notification')).toHaveText('Planning month updated.');
   const friday = page.locator('.calendar-day.friday').first();
   await friday.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.calendar-day.friday.official')).toHaveCount(1);
   await page.getByLabel('I reviewed official holidays for this month.').check();
+  await expect(page.locator('#notification')).toHaveText('Official holiday review saved.');
   await page.reload(); await expect(page.locator('.calendar-day.friday.official')).toHaveCount(1);
   await expect(page.getByLabel('I reviewed official holidays for this month.')).toBeChecked();
   await page.locator('.calendar-day.friday.official').click();

@@ -6,4 +6,3 @@ playwright-report/
 *.log
 .env
 .env.*
-

@@ -11,6 +11,7 @@ import * as views from './ui/views.js';
 
 let state = initialState(), worker = null, timer = null, startedAt = 0, toastTimer = null, importPreview = [];
 let storageEnabled = true;
+let changeQueue = Promise.resolve();
 const runtime = { status: 'READY', message: '', elapsedMs: 0, diagnostics: [], employeeId: null, scheduleView: matchMedia('(min-width: 768px)').matches ? 'matrix' : 'employee', storageError: '' };
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
 const pageNames = ['dashboard', 'employees', 'calendar', 'generate', 'schedule', 'reports', 'rules'];
@@ -22,26 +23,40 @@ function notify(message) {
 function render(focus = false) {
   const page = route();
   document.title = `${page === 'dashboard' ? 'Dashboard' : page[0].toUpperCase() + page.slice(1)} | Operation Room Manager`;
-  app.innerHTML = views.shell(state, page, (runtime.storageError ? `<div class="notice error" role="alert">${esc(runtime.storageError)}</div>` : '') + views[page](state, runtime));
+  app.innerHTML = views.shell(state, page, (runtime.storageError ? `<div class="notice error" role="alert">${esc(runtime.storageError)}</div>` : '') + views[page](state, runtime), runtime.saving ? 'Saving…' : runtime.storageError ? 'Not saved on this device' : 'Saved on this device');
   if (focus) document.querySelector('#main').focus({ preventScroll: true });
 }
-async function persist() {
-  if (!storageEnabled) return;
+async function persist(snapshot) {
+  if (!storageEnabled) return false;
   const indicator = () => document.querySelector('#save-indicator');
   if (indicator()) indicator().textContent = 'Saving…';
-  try { await saveState(state); if (indicator()) indicator().textContent = 'Saved on this device'; }
-  catch (error) { runtime.storageError = `Changes could not be saved: ${error.message}. Download a workspace backup now.`; render(); }
+  try { await saveState(snapshot); runtime.storageError = ''; return true; }
+  catch (error) { runtime.storageError = `Changes could not be saved: ${error.message}. Download a workspace backup now.`; return false; }
 }
 function stopWorker(cancelled = false) {
   worker?.terminate(); worker = null; clearInterval(timer); timer = null;
   if (cancelled) { runtime.status = 'CANCELLED'; runtime.message = 'Generation cancelled. Any previous validated schedule is retained.'; runtime.elapsedMs = performance.now() - startedAt; }
 }
-async function update(change, message) {
-  const wasRunning = !!worker;
-  if (wasRunning) stopWorker(true);
-  change(); runtime.status = 'READY'; runtime.message = ''; runtime.diagnostics = []; runtime.elapsedMs = 0;
-  render(); await persist();
-  if (message) notify(message + (wasRunning ? ' Active generation was cancelled because its inputs changed.' : ''));
+function update(change, message, options = {}) {
+  const task = changeQueue.then(async () => {
+    if (options.fingerprint && options.fingerprint !== fingerprint(context(state))) return false;
+    const wasRunning = !!worker && options.resetStatus !== false;
+    if (wasRunning) stopWorker(true);
+    const draft = structuredClone(state);
+    const next = change(draft) ?? draft;
+    runtime.saving = true;
+    // Publish the new state only after IndexedDB's transaction has completed.
+    // Serializing whole changes also prevents an older save from replacing newer inputs.
+    const saved = await persist(next);
+    state = next; runtime.saving = false;
+    if (options.resetStatus !== false) { runtime.status = 'READY'; runtime.message = ''; runtime.diagnostics = []; runtime.elapsedMs = 0; }
+    render();
+    if (!saved) notify('Changes are available in this session but could not be saved. Download a backup.');
+    else if (message) notify(message + (wasRunning ? ' Active generation was cancelled because its inputs changed.' : ''));
+    return saved;
+  });
+  changeQueue = task.catch(() => {});
+  return task;
 }
 function openModal(title, body) {
   modal.innerHTML = `<div class="modal-head"><h2 id="modal-title">${title}</h2><button class="icon-button" data-action="close-modal" aria-label="Close dialog">×</button></div>${body}`;
@@ -52,6 +67,7 @@ function employeeForm(employee = {}) {
   openModal(employee.id ? 'Edit employee' : 'Add employee', `<form id="employee-form"><input type="hidden" name="id" value="${esc(employee.id ?? '')}"><div class="form-grid"><label>Full name<input name="name" required maxlength="100" autocomplete="name" value="${esc(employee.name ?? '')}"></label><div class="form-grid two"><label>Years of service<input name="yearsOfService" type="number" step="0.1" min="0" max="80" required value="${employee.yearsOfService ?? ''}"></label><label>Productivity category<select name="productivityCategory"><option value="">Select category</option>${Object.keys(CONFIG.deductions).map(c => `<option ${employee.productivityCategory === c ? 'selected' : ''}>${c}</option>`).join('')}</select><span class="field-note">Use the employee-provided category. Not applied with radiation benefit.</span></label></div><label class="check-label"><input name="radiationBenefit" type="checkbox" ${employee.radiationBenefit ? 'checked' : ''}>Receives radiation benefit</label></div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary" type="submit">Save employee</button></div></form>`);
 }
 async function startGeneration() {
+  await changeQueue;
   const original = structuredClone(context(state));
   const key = monthKey(state.year, state.month);
   if (!state.employees.length || !state.holidayReviews[key]) return notify('Add employees and review official holidays first.');
@@ -81,9 +97,9 @@ async function startGeneration() {
         const validation = validateSchedule(original, data.schedule);
         if (!validation.valid) { runtime.status = 'INVALID'; runtime.message = 'The independent validator rejected the result. It was not saved.'; runtime.diagnostics = validation.errors; }
         else {
-          state.schedules[key] = { schedule: data.schedule, input: original, fingerprint: fingerprint(original), statistics: data.statistics, validation };
-          runtime.status = 'VALID'; runtime.message = 'All hard constraints passed independent validation. Your schedule is ready.';
-          await persist();
+          const saved = await update(next => { next.schedules[key] = { schedule: data.schedule, input: original, fingerprint: fingerprint(original), statistics: data.statistics, validation }; }, undefined, { resetStatus: false, fingerprint: fingerprint(original) });
+          runtime.status = currentRecord(state) ? 'VALID' : 'READY';
+          runtime.message = currentRecord(state) ? `All hard constraints passed independent validation. ${saved ? 'Your schedule is saved and ready.' : 'Download a backup; the schedule could not be saved.'}` : 'Inputs changed; generate again for the current workspace.';
         }
       } else {
         runtime.status = data.type === 'INFEASIBLE' ? 'INFEASIBLE' : 'ERROR';
@@ -117,13 +133,13 @@ document.addEventListener('click', async event => {
     else if (action === 'delete') {
       const employee = state.employees.find(e => e.id === id);
       openModal('Delete employee?', `<p>Remove <strong>${esc(employee.name)}</strong> from this workspace? Current schedules will need regeneration.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Keep employee</button><button class="btn danger" data-action="confirm-delete" data-id="${id}">Delete employee</button></div>`);
-    } else if (action === 'confirm-delete') { modal.close(); await update(() => { state.employees = state.employees.filter(e => e.id !== id); }, 'Employee deleted.'); }
-    else if (action === 'demo') { if (!state.employees.length) await update(() => { state.employees = structuredClone(demoEmployees); state.demo = true; }, 'Fictional demo employees loaded. Review official holidays next.'); }
+    } else if (action === 'confirm-delete') { modal.close(); await update(next => { next.employees = next.employees.filter(e => e.id !== id); }, 'Employee deleted.'); }
+    else if (action === 'demo') { if (!state.employees.length) await update(next => { next.employees = structuredClone(demoEmployees); next.demo = true; }, 'Fictional demo employees loaded. Review official holidays next.'); }
     else if (action === 'clear-demo') openModal('Clear demo workspace?', '<p>This removes the demo employees and saved demo schedules. Your selected calendar remains.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-clear-demo">Clear demo</button></div>');
-    else if (action === 'confirm-clear-demo') { modal.close(); await update(() => { state.employees = []; state.schedules = {}; state.histories = {}; state.demo = false; }, 'Demo workspace cleared.'); }
+    else if (action === 'confirm-clear-demo') { modal.close(); await update(next => { next.employees = []; next.schedules = {}; next.histories = {}; next.demo = false; }, 'Demo workspace cleared.'); }
     else if (action === 'holiday') {
       const key = monthKey(state.year, state.month), date = target.dataset.date;
-      await update(() => { const dates = new Set(state.holidays[key] ?? []); dates.has(date) ? dates.delete(date) : dates.add(date); state.holidays[key] = [...dates].sort(); state.holidayReviews[key] = false; });
+      await update(next => { const dates = new Set(next.holidays[key] ?? []); dates.has(date) ? dates.delete(date) : dates.add(date); next.holidays[key] = [...dates].sort(); next.holidayReviews[key] = false; });
       document.querySelector(`[data-date="${date}"]`)?.focus();
     } else if (action === 'generate') await startGeneration();
     else if (action === 'cancel') { stopWorker(true); render(); }
@@ -133,11 +149,11 @@ document.addEventListener('click', async event => {
       const mode = modal.querySelector('[name=import-mode]:checked').value;
       const combined = mode === 'replace' ? importPreview : [...state.employees, ...importPreview];
       const validated = normalizeEmployees(combined);
-      modal.close(); await update(() => { state.employees = validated; state.demo = mode === 'replace' ? false : state.demo; }, `${importPreview.length} employees imported.`); importPreview = [];
+      modal.close(); await update(next => { next.employees = validated; next.demo = mode === 'replace' ? false : next.demo; }, `${importPreview.length} employees imported.`); importPreview = [];
     } else if (action === 'template') download('name,yearsOfService,radiationBenefit,productivityCategory\r\nExample employee,5,false,4-8\r\n', 'employee-template.csv', 'text/csv;charset=utf-8');
-    else if (action === 'backup') download(JSON.stringify(state, null, 2), `operation-room-manager-backup-${monthKey(state.year, state.month)}.json`, 'application/json');
+    else if (action === 'backup') { await changeQueue; download(JSON.stringify(state, null, 2), `operation-room-manager-backup-${monthKey(state.year, state.month)}.json`, 'application/json'); }
     else if (action === 'restore') document.querySelector('#backup-file').click();
-    else if (action === 'confirm-restore') { const next = runtime.restorePreview; modal.close(); await update(() => { state = next; runtime.restorePreview = null; }, 'Workspace restored from backup.'); }
+    else if (action === 'confirm-restore') { const next = runtime.restorePreview; modal.close(); await update(() => next, 'Workspace restored from backup.'); runtime.restorePreview = null; }
     else if (action === 'export' || action === 'print') {
       const record = currentRecord(state); if (!record) return notify('Generate a current validated schedule first.');
       const input = context(state), key = monthKey(state.year, state.month);
@@ -154,7 +170,7 @@ document.addEventListener('click', async event => {
         history[e.id] = record.schedule.assignments[e.id].slice(-CONFIG.maxOffDays);
         if (history[e.id].some(r => r.length > 1)) return notify(`Previous assignments for ${e.name} include multiple shifts. Review the employee’s radiation status and enter history manually.`);
       }
-      await update(() => { state.histories[monthKey(state.year, state.month)] = history; }, 'Previous-month assignments loaded.');
+      await update(next => { next.histories[monthKey(next.year, next.month)] = history; }, 'Previous-month assignments loaded.');
     }
   } catch (error) { if (modal.open) formError(error); else notify(error.message); }
 });
@@ -164,23 +180,23 @@ document.addEventListener('submit', async event => {
     if (form.getAttribute('id') === 'employee-form') {
       const raw = Object.fromEntries(data); raw.radiationBenefit = data.has('radiationBenefit');
       const employee = normalizeEmployees([raw])[0];
-      modal.close(); await update(() => { const index = state.employees.findIndex(e => e.id === employee.id); if (index >= 0) state.employees[index] = employee; else state.employees.push(employee); }, 'Employee saved.');
+      modal.close(); await update(next => { const index = next.employees.findIndex(e => e.id === employee.id); if (index >= 0) next.employees[index] = employee; else next.employees.push(employee); }, 'Employee saved.');
     } else if (form.getAttribute('id') === 'calendar-form') {
       const year = Number(data.get('year')), month = Number(data.get('month'));
       // Resolve before mutating so invalid values never enter state.
       context({ ...state, year, month });
-      await update(() => { state.year = year; state.month = month; }, 'Planning month updated.');
+      await update(next => { next.year = year; next.month = month; }, 'Planning month updated.');
     } else if (form.getAttribute('id') === 'history-form') {
       const history = {};
       for (const e of state.employees.filter(e => !e.radiationBenefit)) history[e.id] = [0, 1, 2].map(i => { const s = data.get(`${e.id}_${i}`); if (s === 'OFF') return []; if (!SHIFTS.includes(s)) throw new Error('Select every previous assignment.'); return [s]; });
-      modal.close(); await update(() => { state.histories[monthKey(state.year, state.month)] = history; }, 'Previous-month history saved.');
+      modal.close(); await update(next => { next.histories[monthKey(next.year, next.month)] = history; }, 'Previous-month history saved.');
     }
   } catch (error) { if (modal.open) formError(error); else notify(error.message); }
 });
 document.addEventListener('change', async event => {
   const target = event.target;
-  if (target.id === 'holiday-review') await update(() => { state.holidayReviews[monthKey(state.year, state.month)] = target.checked; }, target.checked ? 'Official holiday review saved.' : 'Holiday review reopened.');
-  else if (target.id === 'boundary-mode') await update(() => { state.boundaryMode = target.value; }, 'Validation scope changed. Regenerate to apply it.');
+  if (target.id === 'holiday-review') { const checked = target.checked; await update(next => { next.holidayReviews[monthKey(next.year, next.month)] = checked; }, checked ? 'Official holiday review saved.' : 'Holiday review reopened.'); }
+  else if (target.id === 'boundary-mode') { const mode = target.value; await update(next => { next.boundaryMode = mode; }, 'Validation scope changed. Regenerate to apply it.'); }
   else if (target.id === 'schedule-employee') { runtime.employeeId = target.value; render(); document.querySelector('#schedule-employee')?.focus(); }
   else if (target.id === 'employee-file' || target.id === 'backup-file') {
     const file = target.files[0]; if (!file) return;

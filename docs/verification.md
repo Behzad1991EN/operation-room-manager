@@ -4,7 +4,8 @@
 
 - 50 automated JavaScript tests passed: all 30 requested rules, Persian dates/leap years, input validation, imports/exports, invalidation, boundary history and real solver integrations.
 - JavaScript syntax checks passed. Static production packaging passed.
-- 12 browser acceptance tests passed in headless Microsoft Edge, including a real module Worker and locally served WebAssembly under `/operation-room-manager/`. The final browser run completed in 30.6 seconds.
+- 13 browser acceptance tests passed in headless Microsoft Edge, including a real module Worker and locally served WebAssembly under `/operation-room-manager/`. The latest local browser run completed in 31.3 seconds.
+- The first GitHub workflow exposed an employee-save/reload race. Application changes now commit to IndexedDB before the new state appears. A regression test keeps a real write transaction open for 400 ms, verifies the pending state, and reloads immediately after the saved employee appears. It passes without an arbitrary test delay.
 - Employee add/edit/delete (including Persian names), CSV preview/apply, invalid import atomicity, IndexedDB reload, holiday toggling, Friday overlap, review persistence, keyboard operation, cancellation, CSV/print exports and stale-schedule hiding passed.
 - Dashboard, employees, calendar, generation, rules, populated employee schedule, matrix container and populated reports were checked at 320, 375, 430, 768, 1024, 1280 and 1440 pixels. No page-level horizontal overflow was found. The full matrix scrolls inside its own region.
 - Console/page errors and HTTP failures were checked in the real-worker acceptance test; none were reported.
