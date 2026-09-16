@@ -15,7 +15,12 @@
 
 ## Deployment verification
 
-Repository creation and GitHub Pages deployment are in progress. Live workflow, asset, routing and worker checks will be recorded after publication.
+- Repository: [Behzad1991EN/operation-room-manager](https://github.com/Behzad1991EN/operation-room-manager). The user's initial commit was preserved.
+- The [fix workflow](https://github.com/Behzad1991EN/operation-room-manager/actions/runs/35123133004) for commit `7dad3fa` passed syntax checks, all 50 JavaScript tests, all 13 browser tests in Chromium on GitHub's Linux runner, production packaging, and Pages deployment.
+- Pages source is **GitHub Actions**, publishing the tested `dist` artifact with the packaged solver. Direct branch publication would omit the generated solver assets and must not be used.
+- [The live application](https://behzad1991en.github.io/operation-room-manager/) loaded with its styles, modules and assets beneath the repository subdirectory. The actual module Worker and local WASM solver generated a schedule for 16 fictional employees in Shahrivar 1405 in 18.37 seconds. Every hard rule passed the independent validator within the explicitly selected within-month scope. The retained soft score was 146.94; a global optimum was not proven.
+- Hash navigation to the monthly schedule worked. Reloading that URL preserved the employees and generated schedule and displayed `VALID`. No browser console warnings or errors were reported during the live generation and reload checks. The displayed matrix was visually inspected.
+- Live verification used only clearly labelled fictional demo employees and a synthetic calendar with Fridays. It does not establish the hospital's official holiday dates or certify a real operational schedule.
 
 ## Outstanding business confirmation
 

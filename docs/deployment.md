@@ -1,10 +1,10 @@
 # Deployment
 
-Target repository: `Behzad1991EN/operation-room-manager`.
+Repository: [Behzad1991EN/operation-room-manager](https://github.com/Behzad1991EN/operation-room-manager).
 
-Target Pages URL: `https://behzad1991en.github.io/operation-room-manager/`.
+Live Pages site: [Operation Room Manager](https://behzad1991en.github.io/operation-room-manager/).
 
-The selected project folder is its own Git repository. Its parent directory contains unrelated work and is not used as the application repository. There was no application history to preserve.
+The selected project folder is its own Git repository. Its parent directory contains unrelated work and is not used as the application repository. The user's initial application commit is preserved in `main`.
 
 ## Pipeline
 
@@ -27,6 +27,6 @@ The development server deliberately supports the repository subdirectory at `/op
 
 The app has no service worker or offline cache in V1. Data is local; a fresh page load still requires its static assets. The host serves the app over HTTPS. Do not publish real employee files or backups in the repository.
 
-Deployment and live verification results are recorded in `docs/verification.md` after the workflow completes.
+The first successful tested deployment and live Worker/reload verification are recorded in [verification](verification.md).
 
 Reference: [GitHub custom Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).

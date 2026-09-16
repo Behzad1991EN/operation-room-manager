@@ -39,9 +39,9 @@ Unit tests cover the 30 requested cases, Persian leap years, boundary histories,
 
 ## GitHub Pages
 
-Repository: https://github.com/Behzad1991EN/operation-room-manager
+Repository: [Behzad1991EN/operation-room-manager](https://github.com/Behzad1991EN/operation-room-manager)
 
-Expected site: https://behzad1991en.github.io/operation-room-manager/
+Live site: [Operation Room Manager](https://behzad1991en.github.io/operation-room-manager/)
 
 `.github/workflows/deploy-pages.yml` runs syntax checks, unit/integration tests, builds a static artifact, runs browser tests and deploys only after all checks pass. Pages must use GitHub Actions as its source. Every URL is relative to the repository base; Workers and the local WASM asset work beneath `/operation-room-manager/`. See [deployment](docs/deployment.md) for setup and verified status.
 
