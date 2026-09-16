@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183d35">
+  <meta name="description" content="Monthly operating-room staff schedules, built and validated privately in your browser. Solar Hijri calendar, fixed shifts and on-call coverage.">
+  <title>Operation Room Manager</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/app.css">
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="app"><div class="boot"><span class="brand-mark">+</span><h1>Operation Room Manager</h1><p>Opening your local workspace…</p></div></div>
+  <div id="notification" role="status" aria-live="polite"></div>
+  <dialog id="modal" aria-labelledby="modal-title"></dialog>
+  <input type="file" id="employee-file" accept=".csv,.json" hidden>
+  <input type="file" id="backup-file" accept=".json" hidden>
+  <noscript>This application needs JavaScript enabled. All employee data remains in your browser.</noscript>
+</body>
+</html>
