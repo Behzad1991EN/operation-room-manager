@@ -1,4 +1,4 @@
-import { CONFIG } from '../config.js';
+import { CONFIG, FIXED } from '../config.js';
 const safeId = /^[a-zA-Z0-9_-]{1,80}$/;
 export function normalizeEmployees(records) {
   if (!Array.isArray(records)) throw new Error('Employees must be an array of records.');
@@ -15,6 +15,8 @@ export function normalizeEmployees(records) {
     if (category === '' && radiation === true) category = null;
     const id = row.id == null || row.id === '' ? crypto.randomUUID() : String(row.id).trim();
     const before = errors.length;
+    const weeklyPattern = row.weeklyPattern ?? {};
+    if (!weeklyPattern || typeof weeklyPattern !== 'object' || Array.isArray(weeklyPattern) || Object.entries(weeklyPattern).some(([day, shift]) => !/^[0-6]$/.test(day) || !FIXED.includes(shift))) errors.push(prefix + ': weeklyPattern must map weekday numbers 0 (Sunday) to 6 (Saturday) to M, E, or N.');
     if (!name || name.length > 100) errors.push(`${prefix}: name is required (maximum 100 characters).`);
     if (!Number.isFinite(years) || years < 0 || years > 80) errors.push(`${prefix}: yearsOfService must be a number from 0 to 80.`);
     if (typeof radiation !== 'boolean') errors.push(`${prefix}: radiationBenefit must be true or false.`);
@@ -22,7 +24,7 @@ export function normalizeEmployees(records) {
     if (!safeId.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) errors.push(`${prefix}: id must be a safe, unique identifier.`);
     if (ids.has(id)) errors.push(`${prefix}: duplicate employee id ${id}.`);
     ids.add(id);
-    if (before === errors.length) employees.push({ id, name, yearsOfService: years, radiationBenefit: radiation, productivityCategory: category });
+    if (before === errors.length) employees.push({ id, name, yearsOfService: years, radiationBenefit: radiation, productivityCategory: category, weeklyPattern: { ...weeklyPattern } });
   });
   if (errors.length) { const error = new Error(errors.join('\n')); error.records = errors; throw error; }
   return employees;

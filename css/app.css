@@ -7,3 +7,5 @@
 @media(min-width:1440px){main{padding:38px 46px 55px}.topbar{padding:0 46px}.hero{grid-template-columns:1fr 270px}.hero-calendar{width:230px}.stat{padding:22px}.stat-number{font-size:2.15rem}.stats{gap:21px}.panel{padding:26px}}
 @media(max-width:374px){main{padding-inline:12px}.panel{padding:16px}.stat{padding:14px 11px}.stat-number{font-size:1.6rem}.hero{padding:21px}.breadcrumb{font-size:.69rem}.topbar{padding:0 12px}.calendar-grid{gap:3px}.calendar-day{min-height:55px}.day-label{font-size:.44rem}.btn{padding:10px 12px}.shift-totals{gap:7px}.shift-total{padding:10px}.employee-card .actions{margin-left:auto}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important}}
+
+.weekly-pattern{border:1px solid var(--line,#dce3dd);border-radius:12px;padding:16px;min-width:0}.weekly-pattern legend{font-weight:600;font-size:.84rem}.code.LEAVE{background:#fae4d3;color:#80502a;font-size:.58rem;padding:4px}.form-grid input{min-width:0}

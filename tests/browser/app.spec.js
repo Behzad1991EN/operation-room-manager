@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 async function open(page, route = 'dashboard') {
   await page.goto(`./#/${route}`);
@@ -13,6 +14,9 @@ async function setupDemo(page) {
   await page.getByRole('button', { name: 'Apply month' }).click();
   await expect(page.locator('#notification')).toHaveText('Planning month updated.');
   await page.getByLabel('I reviewed official holidays for this month.').check();
+  await open(page, 'generate');
+  await page.getByLabel('I reviewed requested leave for this month.').check();
+  await expect(page.locator('#notification')).toHaveText('Requested leave review saved.');
 }
 test('employee create, edit, delete, import preview and persistence', async ({ page }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -86,17 +90,45 @@ test('real module Worker, validation, schedule, reports, export, reload and stal
   page.on('pageerror', e => errors.push(e.message));
   page.on('response', r => { if (r.status() >= 400) failed.push(r.url()); });
   page.on('request', r => { if (!r.url().startsWith('http://127.0.0.1:4173/') && !process.env.APP_URL) external.push(r.url()); });
-  await setupDemo(page); await open(page, 'generate');
+  await setupDemo(page); await open(page, 'employees');
+  await page.getByRole('button', { name: 'Edit Demo employee 13', exact: true }).click();
+  await page.getByRole('combobox', { name: 'چهارشنبه · Wednesday', exact: true }).selectOption('N');
+  await page.getByRole('combobox', { name: 'پنج شنبه · Thursday', exact: true }).selectOption('M');
+  await page.getByRole('button', { name: 'Save employee', exact: true }).click();
+  await expect(page.locator('#notification')).toHaveText('Employee saved.');
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit Demo employee 13', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'چهارشنبه · Wednesday', exact: true })).toHaveValue('N');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await open(page, 'generate');
+  await expect(page.getByRole('button', { name: 'Generate schedule', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Enter requested days off' }).click();
+  await page.getByLabel('Demo employee 01 — leave day numbers', { exact: true }).fill('۱، ۲، ۳، ۴');
+  await page.getByLabel('Demo employee 13 — leave day numbers', { exact: true }).fill('4');
+  await page.getByRole('button', { name: 'Save requested leave' }).click();
+  await expect(page.locator('#notification')).toHaveText('Requested leave saved.');
+  await page.reload();
+  await expect(page.getByLabel('I reviewed requested leave for this month.')).toBeChecked();
+  await page.getByRole('button', { name: 'Enter requested days off' }).click();
+  await expect(page.getByLabel('Demo employee 01 — leave day numbers', { exact: true })).toHaveValue('1, 2, 3, 4');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Generate schedule', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cancel generation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'A validated plan is ready.' })).toBeVisible({ timeout: 75000 });
   await open(page, 'schedule'); await expect(page.locator('table.matrix tbody tr')).toHaveCount(16);
   const csv = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export CSV' }).click();
-  expect((await csv).suggestedFilename()).toBe('schedule-1405-06.csv');
+  const downloaded = await csv;
+  expect(downloaded.suggestedFilename()).toBe('schedule-1405-06.csv');
+  const contents = await readFile(await downloaded.path(), 'utf8');
+  expect(contents.charCodeAt(0)).toBe(0xFEFF);
+  expect(contents).toContain('1405-06-06 (جمعه)');
+  expect(contents).toContain('1405-06-07 (شنبه)');
+  expect(contents).toContain('"LEAVE"');
   const html = page.waitForEvent('download'); await page.getByRole('button', { name: 'Printable HTML' }).click();
   expect((await html).suggestedFilename()).toBe('schedule-1405-06-print.html');
   await page.getByRole('button', { name: 'Employee view', exact: true }).click();
   await expect(page.locator('.daily-row')).toHaveCount(31);
+  await expect(page.locator('.daily-row .code.LEAVE')).toHaveCount(4);
   await page.getByLabel('Select employee').selectOption('demo-2'); await expect(page.getByRole('heading', { name: 'Demo employee 02' })).toBeVisible();
   await open(page, 'reports'); await expect(page.locator('.distribution-card')).toHaveCount(16);
   await page.reload(); await expect(page.locator('.distribution-card')).toHaveCount(16);
@@ -144,6 +176,17 @@ for (const width of [320, 375, 430, 768, 1024, 1280, 1440]) test(`all ordinary p
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflow, `${route} overflows ${width}px`).toBe(false);
   }
+  await open(page, 'employees');
+  await page.getByRole('button', { name: 'Edit Demo employee 01', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'چهارشنبه · Wednesday', exact: true })).toBeVisible();
+  expect(await page.locator('dialog').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: `test-results/weekly-pattern-${width}.png` });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await open(page, 'generate');
+  await page.getByRole('button', { name: 'Enter requested days off' }).click();
+  expect(await page.locator('dialog').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: `test-results/requested-leave-${width}.png` });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Toggle navigation' }).isVisible().then(async visible => {
     if (visible) { await page.getByRole('button', { name: 'Toggle navigation' }).click(); await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible(); await page.keyboard.press('Escape'); }
   });

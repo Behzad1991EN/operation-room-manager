@@ -1,8 +1,9 @@
-import { CONFIG, SHIFTS } from './config.js';
+import { CONFIG, SHIFTS, FIXED } from './config.js';
 import { initialState, validateStoredState, context, currentRecord, fingerprint } from './state.js';
 import { loadState, saveState } from './services/storage.js';
-import { monthKey, monthLabel, previousMonth } from './services/calendar.js';
+import { monthKey, monthLabel, previousMonth, WEEKDAYS, PERSIAN_WEEKDAYS } from './services/calendar.js';
 import { normalizeEmployees } from './models/employee.js';
+import { onLeave, parseLeaveDays, validHistoryRow, parseHistoryRow } from './services/availability.js';
 import { importEmployees } from './import/employees.js';
 import { validateSchedule } from './scheduler/validator.js';
 import { scheduleCSV, printableHTML, download, escapeHTML as esc } from './export/schedule.js';
@@ -64,17 +65,18 @@ function openModal(title, body) {
 }
 function formError(error) { const field = modal.querySelector('.form-error'); if (field) field.textContent = error.message; else notify(error.message); }
 function employeeForm(employee = {}) {
-  openModal(employee.id ? 'Edit employee' : 'Add employee', `<form id="employee-form"><input type="hidden" name="id" value="${esc(employee.id ?? '')}"><div class="form-grid"><label>Full name<input name="name" required maxlength="100" autocomplete="name" value="${esc(employee.name ?? '')}"></label><div class="form-grid two"><label>Years of service<input name="yearsOfService" type="number" step="0.1" min="0" max="80" required value="${employee.yearsOfService ?? ''}"></label><label>Productivity category<select name="productivityCategory"><option value="">Select category</option>${Object.keys(CONFIG.deductions).map(c => `<option ${employee.productivityCategory === c ? 'selected' : ''}>${c}</option>`).join('')}</select><span class="field-note">Use the employee-provided category. Not applied with radiation benefit.</span></label></div><label class="check-label"><input name="radiationBenefit" type="checkbox" ${employee.radiationBenefit ? 'checked' : ''}>Receives radiation benefit</label></div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary" type="submit">Save employee</button></div></form>`);
+  openModal(employee.id ? 'Edit employee' : 'Add employee', `<form id="employee-form"><input type="hidden" name="id" value="${esc(employee.id ?? '')}"><div class="form-grid"><label>Full name<input name="name" required maxlength="100" autocomplete="name" value="${esc(employee.name ?? '')}"></label><div class="form-grid two"><label>Years of service<input name="yearsOfService" type="number" step="0.1" min="0" max="80" required value="${employee.yearsOfService ?? ''}"></label><label>Productivity category<select name="productivityCategory"><option value="">Select category</option>${Object.keys(CONFIG.deductions).map(c => `<option ${employee.productivityCategory === c ? 'selected' : ''}>${c}</option>`).join('')}</select><span class="field-note">Use the employee-provided category. Not applied with radiation benefit.</span></label></div><label class="check-label"><input name="radiationBenefit" type="checkbox" ${employee.radiationBenefit ? 'checked' : ''}>Receives radiation benefit</label><fieldset class="weekly-pattern"><legend>Fixed weekly pattern (optional)</legend><p class="field-note">Choose required fixed shifts by weekday. Requested leave overrides the pattern; all other hard rules still apply.</p><div class="form-grid two">${[6,0,1,2,3,4,5].map(d => `<label>${PERSIAN_WEEKDAYS[d]} · ${WEEKDAYS[d]}<select name="pattern_${d}"><option value="">No fixed pattern</option>${FIXED.map(s => `<option value="${s}" ${employee.weeklyPattern?.[d] === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>`).join('')}</div></fieldset></div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary" type="submit">Save employee</button></div></form>`);
 }
 async function startGeneration() {
   await changeQueue;
   const original = structuredClone(context(state));
   const key = monthKey(state.year, state.month);
   if (!state.employees.length || !state.holidayReviews[key]) return notify('Add employees and review official holidays first.');
+  if (!state.leaveReviews[key]) return notify('Review requested leave for this month first.');
   if (state.boundaryMode === 'continuous') {
     for (const employee of state.employees.filter(e => !e.radiationBenefit)) {
       const history = original.boundary.history[employee.id];
-      if (!Array.isArray(history) || history.length !== CONFIG.maxOffDays || history.some(r => !Array.isArray(r) || r.length > 1 || r.some(s => !SHIFTS.includes(s)))) return notify(`Enter previous-month assignments for ${employee.name} first.`);
+      if (!Array.isArray(history) || history.length !== CONFIG.maxOffDays || history.some(r => !validHistoryRow(r))) return notify(`Enter previous-month assignments for ${employee.name} first.`);
     }
   }
   const extended = document.querySelector('#long-search')?.checked;
@@ -112,13 +114,19 @@ async function startGeneration() {
     worker.postMessage({ type: 'GENERATE_SCHEDULE', payload });
   } catch (error) { stopWorker(); runtime.status = 'ERROR'; runtime.message = error.message; render(); }
 }
+function leaveForm() {
+  const input = context(state);
+  openModal('Requested days off', `<p>${monthLabel(state.year,state.month)}</p><p class="muted">Enter Persian month day numbers separated by commas, such as 5, 12, 18. Leave blank for no requests. Requested leave blocks every shift, overrides weekly patterns, and is exempt from the three-OFF-day limit. Required hours are unchanged.</p><form id="leave-form"><div class="form-grid">${state.employees.map(e => `<label>${esc(e.name)} — leave day numbers<input name="${e.id}" placeholder="5, 12, 18" value="${(input.leaveRequests[e.id] ?? []).map(date => Number(date.slice(-2))).join(', ')}"></label>`).join('')}</div><div class="form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary">Save requested leave</button></div></form>`);
+}
 function historyForm() {
   const people = state.employees.filter(e => !e.radiationBenefit), key = monthKey(state.year, state.month);
-  openModal('Previous month’s final three days', `<p class="muted" style="font-size:.8rem">Enter actual assignments in chronological order. These are used for night-to-morning and consecutive-OFF checks.</p><form id="history-form"><div class="history-grid">${people.map(e => `<div class="history-person"><strong>${esc(e.name)}</strong><div class="form-grid">${[0, 1, 2].map(d => `<label>${['Third-last day', 'Second-last day', 'Last day'][d]}<select name="${e.id}_${d}" required><option value="">Select</option>${['OFF', ...SHIFTS].map(s => `<option value="${s}" ${state.histories[key]?.[e.id]?.[d] && (state.histories[key][e.id][d][0] ?? 'OFF') === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>`).join('')}</div></div>`).join('')}</div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary">Save history</button></div></form>`);
+  openModal('Previous month’s final three days', `<p class="muted" style="font-size:.8rem">Enter actual assignments in chronological order. These are used for night-to-morning and consecutive-OFF checks. Select LEAVE for requested leave and paired codes for actual double shifts.</p><form id="history-form"><div class="history-grid">${people.map(e => `<div class="history-person"><strong>${esc(e.name)}</strong><div class="form-grid">${[0, 1, 2].map(d => `<label>${['Third-last day', 'Second-last day', 'Last day'][d]}<select name="${e.id}_${d}" required><option value="">Select</option>${['OFF', 'LEAVE', ...SHIFTS, 'M+E', 'M+N', 'E+N'].map(s => `<option value="${s}" ${state.histories[key]?.[e.id]?.[d] && (state.histories[key][e.id][d].join('+') || 'OFF') === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>`).join('')}</div></div>`).join('')}</div><div class="modal-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn primary">Save history</button></div></form>`);
 }
 function verifyBackup(raw) {
   const next = validateStoredState(raw);
   for (const [key, record] of Object.entries(next.schedules)) {
+    // Legacy records remain in the backup but cannot be displayed/exported as current schedules.
+    if (record?.input?.config?.version === 1) continue;
     if (!record.input || !record.statistics?.score || !Number.isFinite(record.statistics.score.total) || !Number.isFinite(record.statistics.elapsedMs) || record.fingerprint !== fingerprint(record.input) || !validateSchedule(record.input, record.schedule).valid) throw new Error(`Backup contains an invalid schedule for ${key}.`);
   }
   return next;
@@ -133,10 +141,10 @@ document.addEventListener('click', async event => {
     else if (action === 'delete') {
       const employee = state.employees.find(e => e.id === id);
       openModal('Delete employee?', `<p>Remove <strong>${esc(employee.name)}</strong> from this workspace? Current schedules will need regeneration.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Keep employee</button><button class="btn danger" data-action="confirm-delete" data-id="${id}">Delete employee</button></div>`);
-    } else if (action === 'confirm-delete') { modal.close(); await update(next => { next.employees = next.employees.filter(e => e.id !== id); }, 'Employee deleted.'); }
+    } else if (action === 'confirm-delete') { modal.close(); await update(next => { next.employees = next.employees.filter(e => e.id !== id); for (const requests of Object.values(next.leaveRequests)) delete requests[id]; next.leaveReviews = {}; }, 'Employee deleted.'); }
     else if (action === 'demo') { if (!state.employees.length) await update(next => { next.employees = structuredClone(demoEmployees); next.demo = true; }, 'Fictional demo employees loaded. Review official holidays next.'); }
     else if (action === 'clear-demo') openModal('Clear demo workspace?', '<p>This removes the demo employees and saved demo schedules. Your selected calendar remains.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-clear-demo">Clear demo</button></div>');
-    else if (action === 'confirm-clear-demo') { modal.close(); await update(next => { next.employees = []; next.schedules = {}; next.histories = {}; next.demo = false; }, 'Demo workspace cleared.'); }
+    else if (action === 'confirm-clear-demo') { modal.close(); await update(next => { next.employees = []; next.schedules = {}; next.histories = {}; next.leaveRequests = {}; next.leaveReviews = {}; next.demo = false; }, 'Demo workspace cleared.'); }
     else if (action === 'holiday') {
       const key = monthKey(state.year, state.month), date = target.dataset.date;
       await update(next => { const dates = new Set(next.holidays[key] ?? []); dates.has(date) ? dates.delete(date) : dates.add(date); next.holidays[key] = [...dates].sort(); next.holidayReviews[key] = false; });
@@ -149,7 +157,7 @@ document.addEventListener('click', async event => {
       const mode = modal.querySelector('[name=import-mode]:checked').value;
       const combined = mode === 'replace' ? importPreview : [...state.employees, ...importPreview];
       const validated = normalizeEmployees(combined);
-      modal.close(); await update(next => { next.employees = validated; next.demo = mode === 'replace' ? false : next.demo; }, `${importPreview.length} employees imported.`); importPreview = [];
+      modal.close(); await update(next => { next.employees = validated; if (mode === 'replace') next.leaveRequests = {}; next.leaveReviews = {}; next.demo = mode === 'replace' ? false : next.demo; }, `${importPreview.length} employees imported.`); importPreview = [];
     } else if (action === 'template') download('name,yearsOfService,radiationBenefit,productivityCategory\r\nExample employee,5,false,4-8\r\n', 'employee-template.csv', 'text/csv;charset=utf-8');
     else if (action === 'backup') { await changeQueue; download(JSON.stringify(state, null, 2), `operation-room-manager-backup-${monthKey(state.year, state.month)}.json`, 'application/json'); }
     else if (action === 'restore') document.querySelector('#backup-file').click();
@@ -160,15 +168,16 @@ document.addEventListener('click', async event => {
       const valid = validateSchedule(input, record.schedule); if (!valid.valid) throw new Error('Export blocked: the schedule did not pass validation.');
       if (action === 'export') download(scheduleCSV(input, record.schedule), `schedule-${key}.csv`, 'text/csv;charset=utf-8');
       else download(printableHTML(input, record.schedule, monthLabel(state.year, state.month)), `schedule-${key}-print.html`, 'text/html;charset=utf-8');
-    } else if (action === 'history') historyForm();
+    } else if (action === 'leave') leaveForm();
+    else if (action === 'history') historyForm();
     else if (action === 'use-previous') {
       const previous = previousMonth(state.year, state.month), previousKey = monthKey(previous.year, previous.month), record = state.schedules[previousKey];
       if (!record || !validateSchedule(record.input, record.schedule).valid) return notify('No validated schedule for the previous month is available. Enter its final assignments manually.');
       const history = {};
       for (const e of state.employees.filter(e => !e.radiationBenefit)) {
         if (!record.schedule.assignments[e.id]) return notify(`The previous schedule has no assignments for ${e.name}. Enter history manually.`);
-        history[e.id] = record.schedule.assignments[e.id].slice(-CONFIG.maxOffDays);
-        if (history[e.id].some(r => r.length > 1)) return notify(`Previous assignments for ${e.name} include multiple shifts. Review the employee’s radiation status and enter history manually.`);
+        history[e.id] = record.schedule.assignments[e.id].slice(-CONFIG.maxOffDays).map((row,i) => onLeave(record.input,e.id,record.input.days.at(-CONFIG.maxOffDays+i).date) ? ['LEAVE'] : row);
+        if (history[e.id].some(r => !validHistoryRow(r))) return notify(`Previous assignments for ${e.name} are invalid. Enter history manually.`);
       }
       await update(next => { next.histories[monthKey(next.year, next.month)] = history; }, 'Previous-month assignments loaded.');
     }
@@ -179,16 +188,21 @@ document.addEventListener('submit', async event => {
   try {
     if (form.getAttribute('id') === 'employee-form') {
       const raw = Object.fromEntries(data); raw.radiationBenefit = data.has('radiationBenefit');
+      raw.weeklyPattern = Object.fromEntries([0,1,2,3,4,5,6].filter(d => data.get('pattern_'+d)).map(d => [d,data.get('pattern_'+d)]));
       const employee = normalizeEmployees([raw])[0];
-      modal.close(); await update(next => { const index = next.employees.findIndex(e => e.id === employee.id); if (index >= 0) next.employees[index] = employee; else next.employees.push(employee); }, 'Employee saved.');
+      modal.close(); await update(next => { const index = next.employees.findIndex(e => e.id === employee.id); if (index >= 0) next.employees[index] = employee; else next.employees.push(employee); next.leaveReviews = {}; }, 'Employee saved.');
     } else if (form.getAttribute('id') === 'calendar-form') {
       const year = Number(data.get('year')), month = Number(data.get('month'));
       // Resolve before mutating so invalid values never enter state.
       context({ ...state, year, month });
       await update(next => { next.year = year; next.month = month; }, 'Planning month updated.');
+    } else if (form.getAttribute('id') === 'leave-form') {
+      const input=context(state), requests={};
+      for (const e of state.employees) { const dates=parseLeaveDays(data.get(e.id),input.days); if(dates.length) requests[e.id]=dates; }
+      modal.close(); await update(next => { const key=monthKey(next.year,next.month); next.leaveRequests[key]=requests; next.leaveReviews[key]=true; }, 'Requested leave saved.');
     } else if (form.getAttribute('id') === 'history-form') {
       const history = {};
-      for (const e of state.employees.filter(e => !e.radiationBenefit)) history[e.id] = [0, 1, 2].map(i => { const s = data.get(`${e.id}_${i}`); if (s === 'OFF') return []; if (!SHIFTS.includes(s)) throw new Error('Select every previous assignment.'); return [s]; });
+      for (const e of state.employees.filter(e => !e.radiationBenefit)) history[e.id] = [0, 1, 2].map(i => { return parseHistoryRow(data.get(`${e.id}_${i}`)); });
       modal.close(); await update(next => { next.histories[monthKey(next.year, next.month)] = history; }, 'Previous-month history saved.');
     }
   } catch (error) { if (modal.open) formError(error); else notify(error.message); }
@@ -196,6 +210,7 @@ document.addEventListener('submit', async event => {
 document.addEventListener('change', async event => {
   const target = event.target;
   if (target.id === 'holiday-review') { const checked = target.checked; await update(next => { next.holidayReviews[monthKey(next.year, next.month)] = checked; }, checked ? 'Official holiday review saved.' : 'Holiday review reopened.'); }
+  else if (target.id === 'leave-review') { const checked = target.checked; await update(next => { next.leaveReviews[monthKey(next.year,next.month)]=checked; }, checked ? 'Requested leave review saved.' : 'Requested leave review reopened.'); }
   else if (target.id === 'boundary-mode') { const mode = target.value; await update(next => { next.boundaryMode = mode; }, 'Validation scope changed. Regenerate to apply it.'); }
   else if (target.id === 'schedule-employee') { runtime.employeeId = target.value; render(); document.querySelector('#schedule-employee')?.focus(); }
   else if (target.id === 'employee-file' || target.id === 'backup-file') {

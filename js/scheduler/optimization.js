@@ -2,7 +2,7 @@ import { SHIFTS } from '../config.js';
 import { buildModel, variable } from './model.js';
 
 export function optimizeSchedule(input, highs, candidate, options) {
-  const model = highs.createModel({ format: 'lp', data: buildModel(input, true) });
+  const model = highs.createModel({ format: 'lp', data: buildModel(input, true, candidate.stage) });
   try {
     model.options.set(options);
     const indices = [], values = [], names = [];

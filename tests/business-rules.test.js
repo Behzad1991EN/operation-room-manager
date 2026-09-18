@@ -57,12 +57,12 @@ test('17 any fixed / on-call pair conflicts, including radiation staff', () => {
   }
 });
 test('18 multiple on-call types on one day fail', () => { const f = fixture(); f.schedule.assignments.e1[0] = ['e', 'a']; includes(f, 'H10_SINGLE_ONCALL_PER_DAY'); });
-test('19 all multiple fixed combinations fail for non-radiation staff', () => {
-  for (const row of [['M', 'E'], ['M', 'N'], ['E', 'N'], ['M', 'E', 'N']]) { const f = fixture(); f.schedule.assignments.e1[0] = row; includes(f, 'H11_NON_RADIATION_SINGLE_FIXED'); }
+test('19 all multiple fixed combinations fail in the preferred stage', () => {
+  for (const row of [['M', 'E'], ['M', 'N'], ['E', 'N'], ['M', 'E', 'N']]) { const f = fixture(); f.schedule.assignments.e1[0] = row; includes(f, 'H11_DAILY_FIXED_LIMIT'); }
 });
-test('20 radiation triples fail and all pairs are allowed', () => {
-  const f = fixture(1, { radiationBenefit: true }); f.schedule.assignments.e1[0] = ['M', 'E', 'N']; includes(f, 'H12_RADIATION_NO_TRIPLE_FIXED');
-  for (const row of [['M', 'E'], ['M', 'N'], ['E', 'N']]) { f.schedule.assignments.e1[0] = row; excludes(f, 'H12_RADIATION_NO_TRIPLE_FIXED'); excludes(f, 'H11_NON_RADIATION_SINGLE_FIXED'); }
+test('20 radiation staff cannot take pairs in preferred stage or triples in any stage', () => {
+  const f = fixture(1, { radiationBenefit: true }); f.schedule.assignments.e1[0] = ['M', 'E', 'N']; includes(f, 'H12_NO_TRIPLE_FIXED');
+  for (const row of [['M', 'E'], ['M', 'N'], ['E', 'N']]) { f.schedule.assignments.e1[0] = row; excludes(f, 'H12_NO_TRIPLE_FIXED'); includes(f, 'H11_DAILY_FIXED_LIMIT'); }
 });
 test('21 N followed by M fails only without radiation benefit', () => { const f = fixture(2); f.schedule.assignments.e1 = [['N'], ['M']]; includes(f, 'H13_NON_RADIATION_N_TO_NEXT_M'); f.input.employees[0].radiationBenefit = true; excludes(f, 'H13_NON_RADIATION_N_TO_NEXT_M'); });
 test('22 N followed by E is allowed', () => { const f = fixture(2); f.schedule.assignments.e1 = [['N'], ['E']]; excludes(f, 'H13_NON_RADIATION_N_TO_NEXT_M'); });

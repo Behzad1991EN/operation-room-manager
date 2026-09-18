@@ -4,11 +4,19 @@ A browser-only application for monthly operating-room personnel scheduling using
 
 ## Current status
 
-Version 1 implements employee management, CSV/JSON employee imports with previews, a Persian calendar with manual official holidays, required-hour calculations, a Web Worker constraint solver, independent validation, soft optimization, schedule views, reports, CSV exports, printable HTML, and IndexedDB persistence. Sample employees are fictional and load only when requested.
+Version 1.1 implements employee management, CSV/JSON employee imports with previews, a Persian calendar with manual official holidays, employee-specific weekly fixed patterns, requested leave, staged staffing exceptions, required-hour calculations, a Web Worker constraint solver, independent validation, soft optimization, schedule views, reports, CSV exports, printable HTML, and IndexedDB persistence. Sample employees are fictional and load only when requested.
 
-The app requires explicit review of official holidays before generation. Fridays are automatic. It does not supply an official holiday database or infer movable holidays. Hospital staff must select the approved dates.
+The app requires explicit review of official holidays and requested leave before generation. Fridays are automatic. It does not supply an official holiday database or infer movable holidays. Hospital staff must select the approved dates.
 
 The Excel-compatible CSV schedule export includes the Persian weekday beside each Solar Hijri date, for example `1405-06-06 (جمعه)`. It remains a UTF-8 CSV file, not an `.xlsx` workbook.
+
+## Weekly patterns and requested leave
+
+Edit an employee to choose fixed shifts for weekdays (for example, Wednesday N and Thursday M). Under Generate Schedule, enter requested leave as Persian month day numbers and confirm the monthly leave review. Leave blocks all shifts and overrides that day's weekly pattern. Leave also interrupts the maximum-three-OFF-day check; ordinary unassigned days remain subject to it. Required hours are unchanged.
+
+The solver first tries one fixed shift per person with no senior fixed holiday shifts. After proven infeasibility, it permits single holiday shifts for staff over 8 years. Only if that stage is also proven infeasible can staff with 0–4 years receive two fixed shifts in a day. Radiation status still controls the N-to-next-M restriction, not eligibility for double shifts. A timeout does not enable later exceptions. The result displays the stage used.
+
+Older workspaces retain employees, calendars, and saved records. Schedules under the previous rules must be regenerated; their records remain available in workspace backups. See [the shared-chat rule review](docs/rule-review.md).
 
 ## Stack and architecture
 
@@ -76,7 +84,7 @@ docs/                Design, rules, model, deployment and verification
 - Search is time-bounded. A validated feasible solution may not be globally optimal. A timeout without a solution is an error/undetermined outcome, never “infeasible.” Cancellation terminates the Worker.
 - There is no backend, shared database, sign-in, synchronization, encrypted application storage or regulatory-compliance claim. Browser clearing or changing browser/device does not transfer the workspace. Download backups.
 - The import limit is 200 employee records and 2 MB; large optimization problems may take longer on phones. Exact staffing often makes an oversized team infeasible because everyone must meet their minimum hours.
-- V1 has no leave, skills, staffing overrides, manual assignment editing, approval workflow, automatic holidays, Excel import/export or native PDF export. Printable HTML can be printed to PDF by the browser. No additional hospital restrictions are assumed.
+- V1.1 has no skills, staffing overrides, manual assignment editing, approval workflow, automatic holidays, native Excel import/export or native PDF export. Requested leave blocks assignments but does not change the required-hours formula. Printable HTML can be printed to PDF by the browser. No additional hospital restrictions are assumed.
 - A productivity category is required for non-radiation employees and never inferred from overlapping year labels. Years of service do not alter radiation required hours.
 
 ## Roadmap

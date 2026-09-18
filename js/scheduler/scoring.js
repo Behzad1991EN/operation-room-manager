@@ -1,12 +1,17 @@
-import { CONFIG, SHIFTS } from '../config.js';
+import { CONFIG, SHIFTS, FIXED } from '../config.js';
 import { employeeReport } from '../services/hours.js';
 export function scoreSchedule(input, schedule) {
   const { employees, days, config = CONFIG } = input;
   const rows = employees.map(e => employeeReport(e, days, schedule.assignments[e.id], config));
-  const parts = { S01: 0, S02: 0, S03: 0, S04: 0 };
+  const parts = { S01: 0, S02: 0, S03: 0, S04: 0, S05: 0, S06: 0 };
   const maxYears = Math.max(1, ...employees.map(e => e.yearsOfService));
   const pairCount = Math.max(1, employees.length * (employees.length - 1) / 2);
   rows.forEach((r, i) => {
+    days.forEach((day,d) => {
+      const fixed = schedule.assignments[r.employee.id][d].filter(s => FIXED.includes(s)).length;
+      if (day.isHoliday && r.employee.yearsOfService > config.seniorThreshold) parts.S05 += fixed;
+      parts.S06 += Math.max(0,fixed-1);
+    });
     if (r.employee.yearsOfService > config.seniorThreshold) parts.S01 += Math.abs(config.seniorNightCap - r.counts.N);
     parts.S02 += Math.abs(config.targetA - r.counts.a);
     parts.S04 += r.overtimeHours * (1 + r.employee.yearsOfService / maxYears);

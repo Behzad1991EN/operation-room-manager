@@ -1,6 +1,14 @@
 # Verification
 
-## Local verification — 16 September 2026
+## Version 1.1 local verification — 18 September 2026
+
+- All 66 JavaScript tests passed, including real solver tests for the three ordered search stages, requested leave, weekly patterns, exception eligibility, timeout handling and migration of existing data.
+- All 13 browser acceptance tests passed in Microsoft Edge in 32.0 seconds. They exercised actual weekly-pattern and leave forms, persistence after reload, the module Worker and WASM solver, and downloaded CSV contents containing Persian weekday names and LEAVE markers.
+- Syntax checks and production packaging passed. The seven viewport checks include both new forms. The 320-pixel forms were also visually inspected.
+- Requested leave overrides weekly patterns and interrupts the non-radiation OFF-day count. Senior holiday shifts are tried before junior double shifts. Later exceptions require proof that the earlier stage is infeasible; a timeout alone does not enable them.
+- Existing employee data migrates to schema 2. Older schedules remain saved records but must be regenerated to be current under version 2 of the rules.
+
+## Original local verification — 16 September 2026
 
 - 50 automated JavaScript tests passed: all 30 requested rules, Persian dates/leap years, input validation, imports/exports, invalidation, boundary history and real solver integrations.
 - JavaScript syntax checks passed. Static production packaging passed.

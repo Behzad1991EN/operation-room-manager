@@ -1,9 +1,12 @@
 import { CONFIG, SHIFTS, FIXED, ON_CALL, coverage } from '../config.js';
 import { requiredHours } from '../services/hours.js';
+import { onLeave, patternShift } from '../services/availability.js';
+import { stagePolicy } from './policy.js';
 export const variable = (i, d, s) => `x_${i}_${d}_${s}`;
 // LP is built once per phase. Search/backtracking lives in HiGHS branch-and-cut.
-export function buildModel(input, optimize = false) {
+export function buildModel(input, optimize = false, stage = 'preferred') {
   const { employees, days, config = CONFIG, boundary = { mode: 'independent' } } = input;
+  const policy = stagePolicy(stage);
   const rows = [], binaries = [], objective = [];
   let counter = 0;
   const term = (coef, name) => `${coef >= 0 ? '+' : '-'} ${Math.abs(coef)} ${name}`;
@@ -23,20 +26,29 @@ export function buildModel(input, optimize = false) {
   employees.forEach((e, i) => {
     days.forEach((_, d) => {
       for (const s of SHIFTS) binaries.push(variable(i, d, s));
-      if (!e.radiationBenefit) constrain('single', dayTerms(i, d), '<=', 1);
-      else {
-        constrain('fixed_call', [...dayTerms(i, d, FIXED), ...ON_CALL.map(s => [2, variable(i, d, s)])], '<=', 2);
-        constrain('one_call', dayTerms(i, d, ON_CALL), '<=', 1);
+      const cap = policy.doubles && e.yearsOfService <= config.doubleShiftMaxYears ? 2 : 1;
+      constrain('fixed_call', [...dayTerms(i, d, FIXED), ...ON_CALL.map(s => [cap, variable(i, d, s)])], '<=', cap);
+      constrain('one_call', dayTerms(i, d, ON_CALL), '<=', 1);
+      if (onLeave(input, e.id, days[d].date)) constrain('leave', dayTerms(i,d), '=', 0);
+      else if (patternShift(e, days[d])) constrain('weekly_pattern', [[1,variable(i,d,patternShift(e,days[d]))]], '=', 1);
+      if (!policy.seniorHolidays && days[d].isHoliday && e.yearsOfService > config.seniorThreshold) constrain('senior_holiday', dayTerms(i,d,FIXED), '=', 0);
+      if (optimize) {
+        if (days[d].isHoliday && e.yearsOfService > config.seniorThreshold) objective.push(...dayTerms(i,d,FIXED).map(([c,v]) => [c*config.weights.S05,v]));
+        if (cap === 2) {
+          const extra = 'double_' + i + '_' + d;
+          constrain('double_count', [...dayTerms(i,d,FIXED),[-1,extra]], '<=', 1);
+          objective.push([config.weights.S06,extra]);
+        }
       }
       if (!e.radiationBenefit && d > 0) constrain('night_morning', [[1, variable(i, d - 1, 'N')], [1, variable(i, d, 'M')]], '<=', 1);
-      if (!e.radiationBenefit && d >= config.maxOffDays) constrain('off_window', Array.from({ length: config.maxOffDays + 1 }, (_, k) => dayTerms(i, d - k)).flat(), '>=', 1);
+      if (!e.radiationBenefit && d >= config.maxOffDays && !days.slice(d-config.maxOffDays,d+1).some(day => onLeave(input,e.id,day.date))) constrain('off_window', Array.from({ length: config.maxOffDays + 1 }, (_, k) => dayTerms(i, d - k)).flat(), '>=', 1);
     });
     if (!e.radiationBenefit && boundary.mode === 'continuous') {
       const history = boundary.history[e.id];
       if (history.at(-1).includes('N')) constrain('boundary_night', [[1, variable(i, 0, 'M')]], '=', 0);
       for (let d = 0; d < config.maxOffDays; d++) {
         const assignedBefore = history.slice(d).reduce((s, row) => s + Number(row.length > 0), 0);
-        if (!assignedBefore) constrain('boundary_off', Array.from({ length: d + 1 }, (_, k) => dayTerms(i, k)).flat(), '>=', 1);
+        if (!assignedBefore && !days.slice(0,d+1).some(day => onLeave(input,e.id,day.date))) constrain('boundary_off', Array.from({ length: d + 1 }, (_, k) => dayTerms(i, k)).flat(), '>=', 1);
       }
     }
     const worked = FIXED.flatMap(s => days.map((_, d) => [config.hours[s], variable(i, d, s)]));
@@ -57,7 +69,7 @@ export function buildModel(input, optimize = false) {
   });
   return `Minimize\n objective: ${objective.length ? expression(objective) : '0 ' + binaries[0]}\nSubject To\n${rows.join('\n')}\nBinary\n ${binaries.join('\n ')}\nEnd`;
 }
-export function extractSchedule(result, input) {
+export function extractSchedule(result, input, stage = 'preferred') {
   if (!result.Columns) return null;
   const assignments = {};
   for (let i = 0; i < input.employees.length; i++) {
@@ -67,5 +79,5 @@ export function extractSchedule(result, input) {
       return value > 0.5;
     }));
   }
-  return { dates: input.days.map(d => d.date), assignments, createdAt: new Date().toISOString() };
+  return { stage, rulesVersion: CONFIG.version, dates: input.days.map(d => d.date), assignments, createdAt: new Date().toISOString() };
 }

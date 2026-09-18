@@ -2,7 +2,7 @@
 
 The browser renders seven hash-routed pages. Navigation works without server rewrites, including a direct reload at `/operation-room-manager/#/schedule`.
 
-`app.js` owns events, imports, downloads and Worker lifecycle. `state.js` owns serializable input state and a deterministic input fingerprint. A saved schedule is current only if its input fingerprint exactly matches current employees, calendar, configuration and boundary history. Changing inputs cancels active generation and hides stale schedules from current reports/exports, while preserving their saved snapshot.
+`app.js` owns events, imports, downloads and Worker lifecycle. `state.js` owns serializable input state and a deterministic input fingerprint. A saved schedule is current only if its input fingerprint exactly matches current employees, calendar, requested leave, weekly patterns, configuration and boundary history. Changing inputs cancels active generation and hides stale schedules from current reports/exports, while preserving their saved snapshot.
 
 Employee normalization rejects every invalid row atomically. Categories come from employee data. Calendar logic uses UTC date arithmetic and `Intl.DateTimeFormat` with the Persian calendar to locate Nowruz, handle Esfand leap years and map Persian dates to Gregorian ISO dates. Persian strings are domain identifiers and must not be passed to `Date.parse`.
 
