@@ -1,5 +1,6 @@
 import { SHIFTS, SHIFT_NAMES } from '../config.js';
 import { employeeReport, hoursText } from '../services/hours.js';
+import { PERSIAN_WEEKDAYS } from '../services/calendar.js';
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function csvCell(value) {
   let text = String(value ?? '');
@@ -7,7 +8,7 @@ export function csvCell(value) {
   return '"' + text.replace(/"/g, '""') + '"';
 }
 export function scheduleCSV(input, schedule) {
-  const header = ['Employee', 'Years of service', 'Radiation benefit', ...input.days.map(d => d.date), 'Worked hours', 'Required hours', 'Overtime hours', ...SHIFTS];
+  const header = ['Employee', 'Years of service', 'Radiation benefit', ...input.days.map(d => `${d.date} (${PERSIAN_WEEKDAYS[d.dayOfWeek]})`), 'Worked hours', 'Required hours', 'Overtime hours', ...SHIFTS];
   const rows = input.employees.map(e => {
     const assignments = schedule.assignments[e.id], r = employeeReport(e, input.days, assignments, input.config);
     return [e.name, e.yearsOfService, e.radiationBenefit, ...assignments.map(r => r.join('+') || 'OFF'), r.workedHours, r.requiredHours.toFixed(2), r.overtimeHours.toFixed(2), ...SHIFTS.map(s => r.counts[s])];

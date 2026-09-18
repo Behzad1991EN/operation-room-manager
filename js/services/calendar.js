@@ -1,6 +1,7 @@
 const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC', numberingSystem: 'latn' });
 export const MONTHS = ['Farvardin · فروردین', 'Ordibehesht · اردیبهشت', 'Khordad · خرداد', 'Tir · تیر', 'Mordad · مرداد', 'Shahrivar · شهریور', 'Mehr · مهر', 'Aban · آبان', 'Azar · آذر', 'Dey · دی', 'Bahman · بهمن', 'Esfand · اسفند'];
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const PERSIAN_WEEKDAYS = ['یکشنبه', 'دو شنبه', 'سه شنبه', 'چهارشنبه', 'پنج شنبه', 'جمعه', 'شنبه'];
 const DAY = 86400000;
 const starts = new Map();
 export function persianParts(date = new Date()) {

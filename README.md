@@ -8,6 +8,8 @@ Version 1 implements employee management, CSV/JSON employee imports with preview
 
 The app requires explicit review of official holidays before generation. Fridays are automatic. It does not supply an official holiday database or infer movable holidays. Hospital staff must select the approved dates.
 
+The Excel-compatible CSV schedule export includes the Persian weekday beside each Solar Hijri date, for example `1405-06-06 (جمعه)`. It remains a UTF-8 CSV file, not an `.xlsx` workbook.
+
 ## Stack and architecture
 
 HTML5, CSS3, JavaScript ES modules, Web Workers, IndexedDB and the MIT-licensed HiGHS solver compiled to WebAssembly. Node.js is used only for development, testing and packaging; deployment contains static files, including the solver. Production loads no third-party services, fonts, analytics or telemetry.
