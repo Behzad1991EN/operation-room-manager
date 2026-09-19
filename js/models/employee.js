@@ -11,12 +11,15 @@ export function normalizeEmployees(records) {
     const years = row.yearsOfService === '' || row.yearsOfService == null ? NaN : Number(row.yearsOfService);
     let radiation = row.radiationBenefit;
     if (typeof radiation === 'string') radiation = ({ true: true, false: false, yes: true, no: false, '1': true, '0': false })[radiation.trim().toLowerCase()];
+    let sectionSupervisor = row.sectionSupervisor ?? false;
+    if (typeof sectionSupervisor === 'string') sectionSupervisor = ({ true: true, false: false, yes: true, no: false, '1': true, '0': false, '': false })[sectionSupervisor.trim().toLowerCase()];
     let category = String(row.productivityCategory ?? '').trim().replace(/-/g, '–');
     if (category === '' && radiation === true) category = null;
     const id = row.id == null || row.id === '' ? crypto.randomUUID() : String(row.id).trim();
     const before = errors.length;
     const weeklyPattern = row.weeklyPattern ?? {};
     if (!weeklyPattern || typeof weeklyPattern !== 'object' || Array.isArray(weeklyPattern) || Object.entries(weeklyPattern).some(([day, shift]) => !/^[0-6]$/.test(day) || !FIXED.includes(shift))) errors.push(prefix + ': weeklyPattern must map weekday numbers 0 (Sunday) to 6 (Saturday) to M, E, or N.');
+    if (typeof sectionSupervisor !== 'boolean') errors.push(`${prefix}: sectionSupervisor must be true or false.`);
     if (!name || name.length > 100) errors.push(`${prefix}: name is required (maximum 100 characters).`);
     if (!Number.isFinite(years) || years < 0 || years > 80) errors.push(`${prefix}: yearsOfService must be a number from 0 to 80.`);
     if (typeof radiation !== 'boolean') errors.push(`${prefix}: radiationBenefit must be true or false.`);
@@ -24,7 +27,7 @@ export function normalizeEmployees(records) {
     if (!safeId.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) errors.push(`${prefix}: id must be a safe, unique identifier.`);
     if (ids.has(id)) errors.push(`${prefix}: duplicate employee id ${id}.`);
     ids.add(id);
-    if (before === errors.length) employees.push({ id, name, yearsOfService: years, radiationBenefit: radiation, productivityCategory: category, weeklyPattern: { ...weeklyPattern } });
+    if (before === errors.length) employees.push({ id, name, yearsOfService: years, radiationBenefit: radiation, productivityCategory: category, sectionSupervisor, weeklyPattern: { ...weeklyPattern } });
   });
   if (errors.length) { const error = new Error(errors.join('\n')); error.records = errors; throw error; }
   return employees;

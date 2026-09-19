@@ -1,6 +1,6 @@
 import { CONFIG, SHIFTS, FIXED, ON_CALL, coverage } from '../config.js';
 import { requiredHours } from '../services/hours.js';
-import { onLeave, patternShift } from '../services/availability.js';
+import { onLeave, patternShift, supervisorMorning } from '../services/availability.js';
 import { stagePolicy } from './policy.js';
 export const variable = (i, d, s) => `x_${i}_${d}_${s}`;
 // LP is built once per phase. Search/backtracking lives in HiGHS branch-and-cut.
@@ -31,6 +31,7 @@ export function buildModel(input, optimize = false, stage = 'preferred') {
       constrain('one_call', dayTerms(i, d, ON_CALL), '<=', 1);
       if (onLeave(input, e.id, days[d].date)) constrain('leave', dayTerms(i,d), '=', 0);
       else if (patternShift(e, days[d])) constrain('weekly_pattern', [[1,variable(i,d,patternShift(e,days[d]))]], '=', 1);
+      if (!onLeave(input,e.id,days[d].date) && supervisorMorning(e,days[d])) constrain('supervisor_morning', [[1,variable(i,d,'M')]], '=', 1);
       if (!policy.seniorHolidays && days[d].isHoliday && e.yearsOfService > config.seniorThreshold) constrain('senior_holiday', dayTerms(i,d,FIXED), '=', 0);
       if (optimize) {
         if (days[d].isHoliday && e.yearsOfService > config.seniorThreshold) objective.push(...dayTerms(i,d,FIXED).map(([c,v]) => [c*config.weights.S05,v]));

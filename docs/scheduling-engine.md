@@ -37,3 +37,5 @@ Messages: `GENERATE_SCHEDULE` input; `PROGRESS` phase text; `SUCCESS` with sched
 The main thread validates SUCCESS again with a separate `validator.js` that inspects individual arrays and daily coverage. It does not import model building or solver helpers. All H01–H18 and the selected stage restrictions are checked, together with shape, dates, duplicate/unknown codes, unknown employees and boundary history. Invalid candidates are never saved as successful.
 
 Source references: [HiGHS JavaScript project](https://github.com/lovasoa/highs-js), [HiGHS solver documentation](https://ergo-code.github.io/HiGHS/). The solver package and license are pinned and locally bundled.
+
+Rule version 3 adds a supervisor constraint: x(i,d,M) = 1 for a designated section supervisor on each regular non-leave workday. The validator checks this independently. Preflight includes these mandatory mornings in coverage and weekly-pattern conflict diagnostics. Fridays and official holidays do not receive this constraint.

@@ -23,7 +23,7 @@ export function validateStoredState(raw) {
     validateLeaveRequests(requests, employees, createCalendar(year, month));
   }
   // Retain legacy schedule records for backups, but the new context invalidates them.
-  if (![1, CONFIG.version].includes(raw.config?.version)) throw new Error('Unsupported rules version.');
+  if (![1, 2, CONFIG.version].includes(raw.config?.version)) throw new Error('Unsupported rules version.');
   return { ...raw, schemaVersion: 2, employees, leaveRequests, leaveReviews, config: structuredClone(CONFIG) };
 }
 export function context(state) {

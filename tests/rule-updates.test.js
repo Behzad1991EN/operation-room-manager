@@ -74,7 +74,7 @@ test('version-one workspaces retain data but require a schedule under the new ru
  const state=initialState();state.schemaVersion=1;state.config={...CONFIG,version:1};state.employees=[employee()];delete state.leaveRequests;delete state.leaveReviews;
  const oldInput={employees:state.employees,days:createCalendar(state.year,state.month),config:state.config,boundary:{mode:'independent',history:{}}};
  const key=oldInput.days[0].date.slice(0,7);state.schedules[key]={input:oldInput,fingerprint:fingerprint(oldInput),marker:'legacy'};
- const next=validateStoredState(state);assert.equal(next.config.version,2);assert.equal(next.employees.length,1);assert.equal(next.schedules[key].marker,'legacy');assert.equal(currentRecord(next),null);assert.deepEqual(next.leaveRequests,{});
+ const next=validateStoredState(state);assert.equal(next.config.version,CONFIG.version);assert.equal(next.employees.length,1);assert.equal(next.schedules[key].marker,'legacy');assert.equal(currentRecord(next),null);assert.deepEqual(next.leaveRequests,{});
 });
 test('leave and weekly pattern edits invalidate an existing current schedule',()=>{
  const state=initialState();state.employees=[employee()];const input=context(state),key=input.days[0].date.slice(0,7);
@@ -133,4 +133,56 @@ test('real monthly solve honors weekly patterns, leave overrides and four-day le
  assert.ok(csv.includes('1405-06-06 (جمعه)'));assert.ok(csv.includes('"LEAVE"'));assert.ok(html.includes('LEAVE'));
  const corrupted=structuredClone(result.schedule);corrupted.assignments[input.employees[0].id][0]=['a'];
  assert.ok(validateSchedule(input,corrupted).errors.some(e=>e.ruleId==='H17_REQUESTED_LEAVE'));
+});
+
+
+test('supervisor designation normalizes safely and survives version-two migration',()=>{
+ const base=employee();
+ assert.equal(normalizeEmployees([base])[0].sectionSupervisor,false);
+ for(const value of [true,'true','yes','1']) assert.equal(normalizeEmployees([{...base,sectionSupervisor:value}])[0].sectionSupervisor,true);
+ assert.throws(()=>normalizeEmployees([{...base,sectionSupervisor:'manager'}]));
+ const state=initialState();state.config={...CONFIG,version:2};state.employees=[{...base,sectionSupervisor:true}];
+ const input=context(state),key=input.days[0].date.slice(0,7);state.schedules[key]={input,fingerprint:fingerprint(input)};
+ const restored=validateStoredState(state);assert.equal(restored.employees[0].sectionSupervisor,true);assert.equal(restored.config.version,CONFIG.version);assert.equal(currentRecord(restored),null);
+});
+
+test('supervisor mornings are mandatory on workdays but not Fridays, holidays or leave',()=>{
+ const f=fixture(8,{sectionSupervisor:true});
+ f.input.days=createCalendar(1405,6,['1405-06-02','1405-06-06']).slice(0,8);
+ f.input.leaveRequests.e1=['1405-06-03'];
+ const missing=validateSchedule(f.input,f.schedule).errors.filter(e=>e.ruleId==='H19_SUPERVISOR_MORNING');
+ assert.deepEqual(missing.map(e=>e.date),['1405-06-01','1405-06-04','1405-06-05','1405-06-07','1405-06-08']);
+ for(const issue of missing) f.schedule.assignments.e1[f.schedule.dates.indexOf(issue.date)]=['M'];
+ assert.ok(!errors(f).includes('H19_SUPERVISOR_MORNING'));
+ f.input.employees[0].sectionSupervisor=false;f.schedule.assignments.e1=f.input.days.map(()=>[]);assert.ok(!errors(f).includes('H19_SUPERVISOR_MORNING'));
+});
+
+test('supervisor role edits invalidate existing schedules',()=>{
+ const state=initialState();state.employees=normalizeEmployees([employee()]);const input=context(state),key=input.days[0].date.slice(0,7);
+ state.schedules[key]={fingerprint:fingerprint(input)};assert.ok(currentRecord(state));
+ state.employees[0].sectionSupervisor=true;assert.equal(currentRecord(state),null);
+});
+
+test('supervisor morning conflicts produce diagnostics without erasing weekly patterns',()=>{
+ const input=smallInput(Array.from({length:14},(_,i)=>employee('e'+i)));
+ input.employees[0].sectionSupervisor=true;input.employees[0].yearsOfService=5;input.employees[0].weeklyPattern={0:'E'};
+ assert.ok(preflight(input).errors.some(e=>e.ruleId==='H19_SUPERVISOR_MORNING'));
+ input.employees[0].weeklyPattern={};input.employees.slice(0,9).forEach(e=>e.sectionSupervisor=true);
+ assert.ok(preflight(input).errors.some(e=>e.message.includes('exactly 8')));
+ input.employees.slice(1).forEach(e=>e.sectionSupervisor=false);
+ input.days=createCalendar(1405,6).slice(0,2);input.employees[0].weeklyPattern={0:'N'};
+ assert.ok(preflight(input).errors.some(e=>e.ruleId==='H13_NON_RADIATION_N_TO_NEXT_M'));
+});
+
+test('real monthly solver enforces supervisor mornings, official holidays and requested leave',()=>{
+ const input={employees:normalizeEmployees(structuredClone(demoEmployees)),days:createCalendar(1405,6,['1405-06-02','1405-06-06']),config:{...CONFIG,search:{...CONFIG.search,optimizationSeconds:0}},boundary:{mode:'independent'},leaveRequests:{}};
+ const supervisor=input.employees[1];supervisor.sectionSupervisor=true;input.leaveRequests[supervisor.id]=['1405-06-03'];
+ const result=generateSchedule(input,highs);assert.equal(result.type,'SUCCESS',JSON.stringify(result));assert.ok(validateSchedule(input,result.schedule).valid);
+ input.days.forEach((day,d)=>{
+  const row=result.schedule.assignments[supervisor.id][d];
+  if(onLeave(input,supervisor.id,day.date)) assert.deepEqual(row,[]);
+  else if(!day.isHoliday) assert.ok(row.includes('M'),day.date);
+ });
+ const corrupted=structuredClone(result.schedule);corrupted.assignments[supervisor.id][0]=['E'];
+ assert.ok(validateSchedule(input,corrupted).errors.some(e=>e.ruleId==='H19_SUPERVISOR_MORNING'));
 });

@@ -1,6 +1,6 @@
 import { CONFIG, FIXED, ON_CALL, coverage } from '../config.js';
 import { requiredHours } from '../services/hours.js';
-import { onLeave, patternShift } from '../services/availability.js';
+import { onLeave, patternShift, supervisorMorning } from '../services/availability.js';
 import { stagePolicy } from './policy.js';
 export function preflight(input, stage = 'junior-doubles') {
   const { employees, days, config = CONFIG } = input, policy = stagePolicy(stage);
@@ -18,10 +18,11 @@ export function preflight(input, stage = 'junior-doubles') {
     nightCapacity += nights;
     const optimisticHours = cap(e) === 2 ? available*(config.hours.M+config.hours.N) : available*config.hours.M + nights*(config.hours.N-config.hours.M);
     if (optimisticHours + 1e-7 < requiredHours(e,days,config)) add('H15_REQUIRED_HOURS',e.name + ': available days cannot provide the required hours in this stage.',e.id);
+    for (const day of days) if (!onLeave(input,e.id,day.date) && supervisorMorning(e,day) && patternShift(e,day) && patternShift(e,day)!=='M' && cap(e)===1) add('H19_SUPERVISOR_MORNING',e.name + ': weekly pattern conflicts with required supervisor morning duty in this stage.',e.id,day.date);
     const fixedNights = days.filter(day => !onLeave(input,e.id,day.date) && patternShift(e,day)==='N').length;
     if (e.yearsOfService > config.seniorThreshold && fixedNights > config.seniorNightCap) add('H18_WEEKLY_PATTERN',e.name + ': weekly pattern requires ' + fixedNights + ' nights, exceeding the four-night limit.',e.id);
     if (!e.radiationBenefit) for (let d=1;d<days.length;d++) {
-      if (!onLeave(input,e.id,days[d-1].date) && !onLeave(input,e.id,days[d].date) && patternShift(e,days[d-1])==='N' && patternShift(e,days[d])==='M') add('H13_NON_RADIATION_N_TO_NEXT_M',e.name + ': weekly pattern requires night followed by morning without radiation benefit.',e.id,days[d].date);
+      if (!onLeave(input,e.id,days[d-1].date) && !onLeave(input,e.id,days[d].date) && patternShift(e,days[d-1])==='N' && (patternShift(e,days[d])==='M' || supervisorMorning(e,days[d]))) add('H13_NON_RADIATION_N_TO_NEXT_M',e.name + ': weekly pattern requires night followed by morning without radiation benefit.',e.id,days[d].date);
     }
   }
   const nightsNeeded = days.reduce((s,d) => s+coverage(d,config).N,0);
@@ -33,8 +34,8 @@ export function preflight(input, stage = 'junior-doubles') {
     const fixedCapacity = capacities.slice(calls).reduce((s,c)=>s+c,0);
     if (available.length < calls || available.filter(e=>eligible(e,day)).length < Math.max(...FIXED.map(s=>counts[s])) || fixedCapacity < fixed) add('COVERAGE_CAPACITY','Insufficient available employees for fixed and on-call coverage in this stage (' + available.length + ' available).',null,day.date);
     for (const s of FIXED) {
-      const patterned = available.filter(e=>patternShift(e,day)===s);
-      if (patterned.length > counts[s]) add('H18_WEEKLY_PATTERN','Weekly patterns require ' + patterned.length + ' employees on ' + s + '; coverage allows exactly ' + counts[s] + '.',null,day.date);
+      const patterned = available.filter(e=>patternShift(e,day)===s || (s==='M' && supervisorMorning(e,day)));
+      if (patterned.length > counts[s]) add('H18_WEEKLY_PATTERN','Weekly patterns and supervisor duty require ' + patterned.length + ' employees on ' + s + '; coverage allows exactly ' + counts[s] + '.',null,day.date);
       for (const e of patterned.filter(e=>!eligible(e,day))) add('STAGE_SENIOR_HOLIDAY',e.name + ': weekly pattern needs the senior-holiday exception.',e.id,day.date);
     }
   }

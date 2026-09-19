@@ -1,7 +1,7 @@
 import { CONFIG, SHIFTS, FIXED, ON_CALL, coverage } from '../config.js';
 import { requiredHours, workedHours, shiftCounts } from '../services/hours.js';
 import { normalizeEmployees } from '../models/employee.js';
-import { onLeave, patternShift, validHistoryRow, validateLeaveRequests } from '../services/availability.js';
+import { onLeave, patternShift, supervisorMorning, validHistoryRow, validateLeaveRequests } from '../services/availability.js';
 import { stagePolicy } from './policy.js';
 
 // Deliberately separate from the mathematical model: inspect plain assignments.
@@ -59,6 +59,7 @@ export function validateSchedule(input, schedule) {
       if (!policy.seniorHolidays && days[d].isHoliday && employee.yearsOfService > config.seniorThreshold && fixed) add('STAGE_SENIOR_HOLIDAY', 'Senior fixed holiday shifts require the senior-holiday exception stage.', employee.id, date);
       const leave = onLeave(input,employee.id,date), pattern = patternShift(employee,days[d]);
       if (leave && row.length) add('H17_REQUESTED_LEAVE', 'An assignment falls on requested leave.', employee.id, date);
+      if (!leave && supervisorMorning(employee,days[d]) && !row.includes('M')) add('H19_SUPERVISOR_MORNING', 'Section supervisor requires morning duty on regular workdays.', employee.id, date);
       if (!leave && pattern && !row.includes(pattern)) add('H18_WEEKLY_PATTERN', 'Missing required weekly ' + pattern + ' shift.', employee.id, date);
       if (fixed === FIXED.length) add('H12_NO_TRIPLE_FIXED', 'M + E + N is forbidden.', employee.id, date);
       if (!employee.radiationBenefit) {

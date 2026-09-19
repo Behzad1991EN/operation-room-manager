@@ -44,3 +44,7 @@ The [review and confirmed decisions](rule-review.md) supersede the original same
 Requested leave is hard unavailability for both fixed and on-call shifts, overrides weekly patterns on those dates, and is exempt from the maximum-three-OFF-day rule. It does not reduce required hours. Weekly patterns are configurable per employee, not hardcoded names; other hard rules can make a pattern infeasible (for example, five required nights for a senior employee).
 
 There is no objective to create discretionary OFF days. Exact staffing can nevertheless require unassigned days when available employees exceed assignment slots. LEAVE and OFF are displayed/exported separately. The month-boundary question above remains open.
+
+## Section supervisor — rules version 3
+
+H19_SUPERVISOR_MORNING requires fixed M for each designated section supervisor on regular workdays. Fridays and official holidays are excluded from this requirement; other holiday rules still apply. Requested leave overrides the required morning. Weekly patterns remain constraints, so a conflicting evening/night pattern must be resolved within the existing daily limits or reported as infeasible. No employee name is hardcoded; the role is assigned in the employee form.

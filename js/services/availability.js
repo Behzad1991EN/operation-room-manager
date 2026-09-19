@@ -1,5 +1,6 @@
 import { FIXED, SHIFTS } from '../config.js';
 export const onLeave = (input, employeeId, date) => (input.leaveRequests?.[employeeId] ?? []).includes(date);
+export const supervisorMorning = (employee, day) => employee.sectionSupervisor === true && !day.isHoliday && !day.isFriday && day.dayOfWeek !== 5;
 export const patternShift = (employee, day) => employee.weeklyPattern?.[day.dayOfWeek] ?? '';
 export function validateLeaveRequests(requests, employees, days) {
   if (!requests || typeof requests !== 'object' || Array.isArray(requests)) throw new Error('Invalid requested-leave data.');

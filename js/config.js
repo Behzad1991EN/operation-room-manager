@@ -1,5 +1,5 @@
 export const CONFIG = Object.freeze({
-  version: 2,
+  version: 3,
   hours: { M: 7, E: 7, N: 13, m: 0, e: 0, a: 0 },
   staffing: { normal: { M: 8, E: 2, N: 2, m: 0, e: 1, a: 1 }, holiday: { M: 2, E: 2, N: 2, m: 1, e: 1, a: 1 } },
   dailyBaseHours: 7.33,
@@ -37,6 +37,7 @@ export const RULES = [
   ['H16_OVER_8_MAX_FOUR_NIGHTS', 'Experienced staff night limit', 'More than 8 years of service: at most 4 fixed nights per month.'],
   ['H17_REQUESTED_LEAVE', 'Requested leave', 'No fixed or on-call shifts on requested leave dates. Leave overrides weekly patterns; required hours are unchanged.'],
   ['H18_WEEKLY_PATTERN', 'Fixed weekly patterns', 'Honor each employee’s weekday/shift pattern unless that date is requested leave. Other hard rules still apply.'],
+  ['H19_SUPERVISOR_MORNING', 'Section supervisor mornings', 'Section supervisors must work M on regular workdays, excluding Fridays and official holidays. Requested leave takes priority.'],
   ['S05_SENIOR_HOLIDAYS', 'Senior holiday preference', 'For more than 8 years of service, avoid fixed holiday shifts. Permit these before junior double shifts, only after the preferred stage is proven infeasible.'],
   ['S06_JUNIOR_DOUBLE_SHIFTS', 'Double shifts only as a last resort', 'Allow pairs for 0–4 years only after both single-shift stages are proven infeasible, and penalize their use.'],
   ['S01_OVER_8_TARGET_FOUR_NIGHTS', 'Four-night preference', 'For employees with more than 8 years of service, prefer 4 nights. Fewer is valid.'],

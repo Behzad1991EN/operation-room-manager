@@ -3,7 +3,7 @@
 ```js
 {
   schemaVersion: 2,
-  employees: [{ id, name, yearsOfService, radiationBenefit, productivityCategory, weeklyPattern: { 3: 'N', 4: 'M' } }],
+  employees: [{ id, name, yearsOfService, radiationBenefit, productivityCategory, sectionSupervisor: false, weeklyPattern: { 3: 'N', 4: 'M' } }],
   year: 1405, month: 6,
   holidays: { '1405-06': ['1405-06-01'] },
   holidayReviews: { '1405-06': true },
@@ -15,7 +15,7 @@
   schedules: {
     '1405-06': {
       input, fingerprint,
-      schedule: { stage: 'preferred', rulesVersion: 2, dates: ['1405-06-01'], assignments: { employeeId: [['M']] }, createdAt },
+      schedule: { stage: 'preferred', rulesVersion: 3, dates: ['1405-06-01'], assignments: { employeeId: [['M']] }, createdAt },
       statistics: { elapsedMs, stage, attempts, score, optimal, solverStatus, optimizationStatus },
       validation: { valid, errors, warnings }
     }
@@ -34,4 +34,6 @@ CSV and JSON parsing are separate from normalization and scheduling. Every recor
 
 Worked hours, requirements, overtime and per-type counts are computed from current inputs and schedules. Snapshots preserve the inputs used for validation. Input changes invalidate the current view without silently altering saved assignments. V1 keeps the latest schedule per Persian month.
 
-Weekly patterns are optional maps from JavaScript weekday numbers 0 (Sunday) through 6 (Saturday) to a single M, E or N shift. Names are never hardcoded. Leave is stored by Persian month and employee ID; requested dates must belong to that month. Editing leave or patterns invalidates saved schedules. Version-one backups migrate to rule/schema version two without discarding their original saved schedule records, which cannot be exported or used as current schedules under the new rules.
+Weekly patterns are optional maps from JavaScript weekday numbers 0 (Sunday) through 6 (Saturday) to a single M, E or N shift. Names are never hardcoded. Leave is stored by Persian month and employee ID; requested dates must belong to that month. Editing leave or patterns invalidates saved schedules. Version-one and version-two rule backups migrate to rule version three with schema version two without discarding their original saved schedule records, which cannot be exported or used as current schedules under the new rules.
+
+Section supervisor is an optional boolean, defaulting to false. Employee edits, imports and backups preserve it. Role changes invalidate current schedules. Its mandatory morning rule uses actual month dates, skipping holidays/Fridays and requested leave.

@@ -91,6 +91,14 @@ test('real module Worker, validation, schedule, reports, export, reload and stal
   page.on('response', r => { if (r.status() >= 400) failed.push(r.url()); });
   page.on('request', r => { if (!r.url().startsWith('http://127.0.0.1:4173/') && !process.env.APP_URL) external.push(r.url()); });
   await setupDemo(page); await open(page, 'employees');
+  await page.getByRole('button', { name: 'Edit Demo employee 02', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Section supervisor', exact: true }).check();
+  await page.getByRole('button', { name: 'Save employee', exact: true }).click();
+  await expect(page.locator('#notification')).toHaveText('Employee saved.');
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit Demo employee 02', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Section supervisor', exact: true })).toBeChecked();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Edit Demo employee 13', exact: true }).click();
   await page.getByRole('combobox', { name: 'چهارشنبه · Wednesday', exact: true }).selectOption('N');
   await page.getByRole('combobox', { name: 'پنج شنبه · Thursday', exact: true }).selectOption('M');
@@ -130,6 +138,9 @@ test('real module Worker, validation, schedule, reports, export, reload and stal
   await expect(page.locator('.daily-row')).toHaveCount(31);
   await expect(page.locator('.daily-row .code.LEAVE')).toHaveCount(4);
   await page.getByLabel('Select employee').selectOption('demo-2'); await expect(page.getByRole('heading', { name: 'Demo employee 02' })).toBeVisible();
+  const regularDays = page.locator('.daily-row:not(.holiday)');
+  await expect(regularDays).toHaveCount(27);
+  await expect(regularDays.locator('.code.M')).toHaveCount(27);
   await open(page, 'reports'); await expect(page.locator('.distribution-card')).toHaveCount(16);
   await page.reload(); await expect(page.locator('.distribution-card')).toHaveCount(16);
   for (const width of [320, 375, 430, 768, 1024, 1280, 1440]) {

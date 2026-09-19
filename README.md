@@ -4,11 +4,15 @@ A browser-only application for monthly operating-room personnel scheduling using
 
 ## Current status
 
-Version 1.1 implements employee management, CSV/JSON employee imports with previews, a Persian calendar with manual official holidays, employee-specific weekly fixed patterns, requested leave, staged staffing exceptions, required-hour calculations, a Web Worker constraint solver, independent validation, soft optimization, schedule views, reports, CSV exports, printable HTML, and IndexedDB persistence. Sample employees are fictional and load only when requested.
+Version 1.2 implements employee management, CSV/JSON employee imports with previews, a Persian calendar with manual official holidays, employee-specific weekly fixed patterns, requested leave, staged staffing exceptions, required-hour calculations, a Web Worker constraint solver, independent validation, soft optimization, schedule views, reports, CSV exports, printable HTML, and IndexedDB persistence. Sample employees are fictional and load only when requested.
 
 The app requires explicit review of official holidays and requested leave before generation. Fridays are automatic. It does not supply an official holiday database or infer movable holidays. Hospital staff must select the approved dates.
 
 The Excel-compatible CSV schedule export includes the Persian weekday beside each Solar Hijri date, for example `1405-06-06 (جمعه)`. It remains a UTF-8 CSV file, not an `.xlsx` workbook.
+
+## Section supervisor
+
+In Employees, edit the designated supervisor and enable **Section supervisor**. This requires M on every regular workday, excluding Fridays and official holidays. Requested leave takes priority. Other constraints still apply, and conflicting weekly patterns are reported. This rule does not make holidays automatic leave. The role is stored in the user's browser and can also be imported as an optional sectionSupervisor true/false field; names are not hardcoded.
 
 ## Weekly patterns and requested leave
 

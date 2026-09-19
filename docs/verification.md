@@ -1,5 +1,12 @@
 # Verification
 
+## Version 1.2 local verification — 19 September 2026
+
+- All 71 JavaScript tests passed, including supervisor-role normalization, rule-version-two migration, schedule invalidation, holiday/Friday/leave exemptions, conflicting weekly patterns and a full-month solve.
+- All 13 browser test cases passed, including saving the supervisor role, reloading it, generating a real schedule and verifying morning duty on all 27 regular days in the test month.
+- Syntax checks and production packaging passed. The existing responsive checks include the updated employee form.
+
+
 ## Version 1.1 local verification — 18 September 2026
 
 - All 66 JavaScript tests passed, including real solver tests for the three ordered search stages, requested leave, weekly patterns, exception eligibility, timeout handling and migration of existing data.
